@@ -90,3 +90,7 @@ races involving OnEdge's code itself.
 * Kavya Joshi. [Looking inside a Race Detector](https://www.infoq.com/presentations/go-race-detector). QCon, 10 March 2017.
 
 * Dmitry Vyukov and Andrew Gerrand. [Introducing the Go Race Detector](https://blog.golang.org/race-detector). The Go Blog, 26 June 2013.
+
+## License
+
+The code in this repository is licensed under the [Apache 2.0 license](LICENSE).
