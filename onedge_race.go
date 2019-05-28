@@ -16,7 +16,7 @@
 
 // +build race
 
-// This is the "race" version of OnEdge.  (Compared this version to the "onedge_noreace.go", which does
+// This is the "race" version of OnEdge.  (Compared this version to "onedge_noreace.go", which does
 // essentially nothing).
 
 // This version works as follows.  When the program under test enters a function wrapped by WrapFuncR
