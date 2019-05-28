@@ -1,6 +1,17 @@
 //====================================================================================================//
-// Copyright 2019 Trail of Bits. All rights reserved.
-// account.go
+// Copyright 2019 Trail of Bits
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 //====================================================================================================//
 
 package main
@@ -9,7 +20,8 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
-	onedge "trailofbits/on-edge"
+
+	onedge "github.com/trailofbits/on-edge"
 )
 
 var balance = 100
@@ -24,7 +36,7 @@ func main() {
 		} else {
 			debit := r.Intn(100)
 			fmt.Printf("Withdrawing %d...\n", debit)
-			onedge.WrapFunc(func() { withdraw(debit) })
+			withdraw(debit)
 		}
 		fmt.Printf("New balance: %d\n", balance)
 	}
@@ -35,18 +47,20 @@ func deposit(credit int) {
 }
 
 func withdraw(debit int) {
-	defer func() {
-		if r := onedge.WrapRecover(recover()); r != nil {
-			log.Println(r)
+	onedge.WrapFunc(func() {
+		defer func() {
+			if r := onedge.WrapRecover(recover()); r != nil {
+				log.Println(r)
+			}
+		}()
+		/* if balance-debit < 0 {
+			panic("Insufficient funds")
+		} // */
+		balance -= debit
+		if balance < 0 {
+			panic("Insufficient funds")
 		}
-	}()
-	/* if balance-debit < 0 {
-		panic("Insufficient funds")
-	} //*/
-	balance -= debit
-	if balance < 0 {
-		panic("Insufficient funds")
-	}
+	})
 }
 
 //====================================================================================================//
