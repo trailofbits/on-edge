@@ -16,17 +16,17 @@
 
 TEST_FLAGS := -test.failfast -test.v
 
-.PHONY: test basic_test nested_test onedge.test vet
+.PHONY: test basic_test nested_test on-edge.test vet
 
 test: basic_test nested_test
 
-basic_test: onedge.test
+basic_test: on-edge.test
 	./$< $(TEST_FLAGS) -test.run TestBasic
 
-nested_test: onedge.test
+nested_test: on-edge.test
 	./$< $(TEST_FLAGS) -test.run TestNested
 
-onedge.test:
+on-edge.test:
 	go test -race -c
 
 vet:

@@ -88,7 +88,7 @@ func runExample(t *testing.T, args ...string) ([]byte, error) {
 	}
 	exampleName := "Example" + t.Name()[4:]
 	cmd := exec.Command(
-		"./onedge.test",
+		"./on-edge.test",
 		append([]string{"-test.failfast", "-test.v", "-test.run", exampleName + "$"}, args...)...,
 	)
 	if utilVerbose {
