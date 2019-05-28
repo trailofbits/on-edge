@@ -26,34 +26,34 @@ When Go's race detector is disabled, OnEdge does nothing.
 
 To incorporate OnEdge into your project, you must do three things.
 
-1. **Wrap functions that `defer` calls to `recover` in `onedge.WrapFunc(func() {` ... `})`**, e.g.,
-```
-onedge.WrapFunc(func() { handle(request) })
-```
+1. Wrap function bodies that `defer` calls to `recover` in `onedge.WrapFunc(func() {` ... `})`.
 
-2. **Within wrapped functions, wrap calls to `recover` in `onedge.WrapRecover(` ... `)`**, e.g.,
+2. Within those wrapped function bodies, wrap calls to `recover` in `onedge.WrapRecover(` ... `)`.
+
+3. Run your program with Go's race detector
+[enabled](https://golang.org/doc/articles/race_detector.html#Usage), e.g., `go run -race mysrc.go`.
+
+A function to which steps 1 and 2 have been applied might look something like this:
 ```
 func handle(request Request) {
-    defer func() {
-        if r := onedge.WrapRecover(recover()); r != nil {
-          log.Println(r)
-        }
-    }()
-    ...
-    // Panicky code that potentially modifies global state
-    ...
+    onedge.WrapFunc(func() {
+        defer func() {
+          if r := onedge.WrapRecover(recover()); r != nil {
+            log.Println(r)
+          }
+        }()
+        ...
+        // Panicky code that potentially modifies global state
+        ...
+    })
 }
 ```
 
-3. **Run your program with Go's race detector
-[enabled](https://golang.org/doc/articles/race_detector.html#Usage)**, e.g.,
-```
-$ go run -race mysrc.go
-```
-
-Data races will be reported for global state changes that occur
-* after entry to a function wrapped by `WrapFunc`
+Step 3 will cause data races to be reported for global state changes that occur:
+* after entry to a function body wrapped by `WrapFunc`
 * but before a `recover` wrapped by `WrapRecover`.
+
+An example can be found in the [example](example) subdirectory.
 
 ## Limitations
 
