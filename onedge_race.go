@@ -107,16 +107,14 @@ func WrapFunc(f func()) {
 func WrapFuncR(f func() interface{}) interface{} {
 	inMainThread := len(mainThreadStack) <= 0 ||
 		haveCallers(mainThreadStack[len(mainThreadStack)-1].callers)
-	var toShadowThreadExitChan chan struct{}
-	var wrappedFunc wrappedFuncT
 	if !inMainThread {
 		shadowThreadWrapFuncDepth++
 		defer func() {
 			shadowThreadWrapFuncDepth--
 		}()
 	} else {
-		toShadowThreadExitChan = make(chan struct{})
-		wrappedFunc = wrappedFuncT{
+		toShadowThreadExitChan := make(chan struct{})
+		wrappedFunc := wrappedFuncT{
 			callers:                      callers(),
 			f:                            f,
 			toShadowThreadCallFuncChan:   make(chan struct{}),
