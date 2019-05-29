@@ -42,7 +42,7 @@ import (
 //====================================================================================================//
 
 // wrappedFuncT are created by the main thread when WrapFuncR is called.  A wrappedFuncT corresponds
-// to a shadow thread.  The wrappedFuncT serves two purposes.  It allows the main thread to distinguish
+// to a shadow thread.  A wrappedFuncT serves two purposes.  It allows the main thread to distinguish
 // itself from the shadow thread and vice versa.  It also contains information that allows the main
 // thread to communicate with the shadow thread.
 type wrappedFuncT struct {
