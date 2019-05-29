@@ -16,8 +16,8 @@
 
 // +build race
 
-// This is the "race" version of OnEdge.  (Compared this version to "onedge_norace.go", which does
-// essentially nothing).
+// This is the "race" version of OnEdge.  Compare this version to "onedge_norace.go", which does
+// essentially nothing.
 
 // This version works as follows.  When the program under test enters a function wrapped by WrapFuncR
 // (see below), OnEdge launches a "shadow thread".  If the wrapped function panics and that panic is
@@ -25,27 +25,9 @@
 // shadow thread.  The idea is that global state changes made by the shadow thread will appear as data
 // races and will be reported by Go's race detector.
 
-// The main thread and shadow threads never run at the same time.  We employ some tricks to make Go's
-// race detector think that the threads are only partially synchronized.  But, in reality, the threads
-// are fully synchronized.
-
-// OnEdge maintains a stack whose entries correspond to calls to WrapFuncR.  When WrapRecover is called,
-// the stack is used to find the enclosing most call to WrapFuncR.  Entries may be pushed onto this
-// stack by either the main thread or a shadow thread.  But entries pushed by the main never appear on
-// top of entries pushed by a shadow thread, which is to say, the stack has the following structure:
-
-//                                    ==== stack growth direction ===>
-// +-----------------+-------------+-----------------+-----------------+-------------+-----------------+
-// | entry pushed by |     ...     | entry pushed by | entry pushed by |     ...     | entry pushed by |
-// |   main thread   |             |   main thread   |  shadow thread  |             |  shadow thread  |
-// +-----------------+-------------+-----------------+-----------------+-------------+-----------------+
-//                                                                                                     ^
-//                                                                                                     |
-//                                                                                     top of stack ---+
-
-// The reason for this structure has to do with how the main and shadow threads are synchronized.  More
-// precisely, a shadow thread that enters a call to WrapFuncR returns before the main thread enters
-// another call to WrapFuncR.
+// The main thread and shadow threads never run at the same time.  Similarly, no two shadow threads run
+// at the same time.  We employ some tricks to make Go's race detector think that the main thread and
+// shadow threads are only partially synchronized.  But, in reality, the threads are fully synchronized.
 
 //====================================================================================================//
 
@@ -59,13 +41,15 @@ import (
 
 //====================================================================================================//
 
-// wrappedFuncT represents a call to WrapFuncR.  If created in the main thread, a wrappedFuncT will have
-// a corresponding shadow thread.
+// wrappedFuncT are created by the main thread when WrapFuncR is called.  A wrappedFuncT corresponds
+// to a shadow thread.  The wrappedFuncT serves two purposes.  It allows the main thread to distinguish
+// itself from the shadow thread and vice versa.  It also contains information that allows the main
+// thread to communicate with the shadow thread.
 type wrappedFuncT struct {
-	// mainThreadCallers is the main thread's callers at the time that WrapFuncR was called.  This field
-	// is used by the main thread to distinguish itself from shadow threads and vice versa (see
-	// haveCallers below).
-	mainThreadCallers []uintptr
+	// callers is the main thread's callers at the time that WrapFuncR was called.  This field is used
+	// by the main thread to distinguish itself from shadow threads and vice versa (see haveCallers
+	// below).
+	callers []uintptr
 	// f is WrapFuncR's function argument.
 	f func() interface{}
 	// toShadowThreadCallFuncChan is used to tell the corresponding shadow thread to call f.
@@ -78,10 +62,17 @@ type wrappedFuncT struct {
 	toShadowThreadRecoverChan chan struct{}
 }
 
-// stack contains a wrappedFuncT for each call to WrapFuncR on the currently running thread's stack.
-// A wrappedFuncT pushed by the main thread will have all fields filled-in.  A wrappedFuncT pushed by a
-// shadow thread will have only the mainThreadCallers field filled-in, all other fields will be nil.
-var stack []wrappedFuncT
+// mainThreadStack contains a wrappedFuncT for each call to WrapFuncR on the main thread's stack.
+// When WrapRecover is called, mainThreadStack is used to find the wrappedFuncT corresponding to the
+// enclosing most call to WrapFuncR.
+var mainThreadStack []wrappedFuncT
+
+// shadowThreadWrapFuncDepth is the number of calls to WrapFuncR on the currently running shadow
+// thread's stack.  Only the main thread creates shadow threads; shadow threads do not create other
+// shadow threads.  When a shadow thread increments shadowThreadWrapFuncDepth, it is as if to say "had
+// this call to WrapFuncR been in the main thread, we would have created another shadow thread and
+// pushed onto the stack".
+var shadowThreadWrapFuncDepth = 0
 
 //====================================================================================================//
 
@@ -96,79 +87,76 @@ func WrapFunc(f func()) {
 //====================================================================================================//
 
 // WrapFuncR is perhaps best explained using pseudocode.
-//  if in a shadow thread:
-//     push a wrappedFuncT onto the stack
+//   if in a shadow thread:
+//     increment shadowThreadWrapFuncDepth
 //     call the function f
-//     pop the wrappedFuncT
-//     return the result of calling f
-//  if in the main thread:
+//     decrement shadowThreadWrapFuncDepth
+//   else (i.e., in the main thread):
 //     create channels for communicating with a shadow thread and record them in a wrappedFuncT
 //     push the wrappedFuncT onto the stack
 //     create a new shadow thread
 //     call the function f
+//     tell the shadow thread to exit
 //     pop the wrappedFuncT
+//   either way, finally:
 //     return the result of calling f
 // Note that the main thread must create the shadow thread here, in WrapFuncR, and not in WrapRecover.
 // If the main thread were to create the shadow thread in WrapRecover, then any global state changes
 // caused by executing f in the main thread would have occurred prior to the shadow thread's creation.
 // Thus, those global state changes would not be eligible to be data races.
 func WrapFuncR(f func() interface{}) interface{} {
-	inMainThread := len(stack) <= 0 || haveCallers(stack[len(stack)-1].mainThreadCallers)
+	inMainThread := len(mainThreadStack) <= 0 ||
+		haveCallers(mainThreadStack[len(mainThreadStack)-1].callers)
 	var toShadowThreadExitChan chan struct{}
 	var wrappedFunc wrappedFuncT
 	if !inMainThread {
-		wrappedFunc = wrappedFuncT{
-			mainThreadCallers: stack[len(stack)-1].mainThreadCallers,
-		}
+		shadowThreadWrapFuncDepth++
+		defer func() {
+			shadowThreadWrapFuncDepth--
+		}()
 	} else {
 		toShadowThreadExitChan = make(chan struct{})
 		wrappedFunc = wrappedFuncT{
-			mainThreadCallers:            callers(),
+			callers:                      callers(),
 			f:                            f,
 			toShadowThreadCallFuncChan:   make(chan struct{}),
 			fromShadowThreadCallFuncChan: make(chan struct{}),
 			fromShadowThreadRecoverChan:  make(chan interface{}),
 			toShadowThreadRecoverChan:    make(chan struct{}),
 		}
-	}
-	stack = append(stack, wrappedFunc)
-	// sam.moelius: The main thread may create many shadow threads during a run of a program.  But
-	// shadow threads do not themselves create new shadow threads.
-	if inMainThread {
+		mainThreadStack = append(mainThreadStack, wrappedFunc)
 		go shadowThread(toShadowThreadExitChan, wrappedFunc)
-	}
-	defer func() {
-		if inMainThread {
+		defer func() {
 			toShadowThreadExitChan <- struct{}{}
-		}
-		stack = stack[:len(stack)-1]
-	}()
+			mainThreadStack = mainThreadStack[:len(mainThreadStack)-1]
+		}()
+	}
 	return f()
 }
 
 //====================================================================================================//
 
 // WrapRecover, like WrapFuncR, is perhaps best explained using pseudocode.
-//  if in a shadow thread:
+//   if in a shadow thread:
 //     if the enclosing most WrapFuncR was called in the main thread:
 //       forward argument r (the recover result) to the main thread
-//     return r
-//  if in the main thread:
-//	   if r is non-nil (i.e., a panic occurred):
+//   else (i.e., in the main thread):
+//     if r is non-nil (i.e., a panic occurred):
 //       tell the shadow thread corresponding to the enclosing most WrapFuncR to call its function
 //         argument
 //       wait for the shadow thread to forward any recover results
 //       generate an error message if no recover results are received from the shadow thread, multiple
 //         results are received, or a result does not match what was obtained in the main thread
+//   either way, finally:
 //     return r
 func WrapRecover(r interface{}) interface{} {
-	if len(stack) <= 0 {
+	if len(mainThreadStack) <= 0 {
 		fmt.Fprintf(os.Stderr, "=== WrapRecover with no enclosing WrapFunc/WrapFuncR.\n")
 		return r
 	}
-	wrappedFunc := stack[len(stack)-1]
-	if !haveCallers(wrappedFunc.mainThreadCallers) {
-		if wrappedFunc.f != nil {
+	wrappedFunc := mainThreadStack[len(mainThreadStack)-1]
+	if !haveCallers(wrappedFunc.callers) {
+		if shadowThreadWrapFuncDepth <= 0 {
 			wrappedFunc.fromShadowThreadRecoverChan <- r
 			<-wrappedFunc.toShadowThreadRecoverChan
 		}
@@ -212,7 +200,7 @@ func WrapRecover(r interface{}) interface{} {
 			nRecover++
 			wrappedFunc.toShadowThreadRecoverChan <- struct{}{}
 		}
-		if nRecover == 0 {
+		if nRecover <= 0 {
 			fmt.Fprintf(os.Stderr, "=== Shadow thread did not recover as it should have.\n")
 		} else if nRecover >= 2 {
 			fmt.Fprintf(os.Stderr, "=== Shadow thread recovered multiple times (%d).\n", nRecover)
