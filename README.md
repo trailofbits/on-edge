@@ -18,7 +18,7 @@ OnEdge reduces the problem of finding such global state changes to one of race d
 program enters a function that `defer`s a call to `recover`, OnEdge launches a _shadow thread_.  If that
 function later `panic`s, then the function is re-executed in the shadow thread.  If doing so causes the
 shadow thread to make a global state change before calling `recover`, then that change appears as a data
-race and is reported by [Go's race detector](https://golang.org/doc/articles/race_detector.html).
+race and can be reported by [Go's race detector](https://golang.org/doc/articles/race_detector.html).
 
 When Go's race detector is disabled, OnEdge does nothing.
 
