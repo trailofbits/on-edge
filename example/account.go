@@ -53,6 +53,8 @@ func withdraw(debit int) {
 				log.Println(r)
 			}
 		}()
+		// sam.moelius: Uncommenting the next if statement prevents global state changes from occurring
+		// before a panic.
 		/* if balance-debit < 0 {
 			panic("Insufficient funds")
 		} // */
