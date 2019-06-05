@@ -232,7 +232,9 @@ func shadowThread(toShadowThreadExitChan chan struct{}, wrappedFunc wrappedFuncT
 		// wrapped function.  Allowing those panics to escape would cause the program to terminate.
 		func() {
 			defer func() {
-				recover()
+				if r := recover(); r != nil {
+					fmt.Fprintf(os.Stderr, "=== Shadow thread panicked and did not recover: %v\n", r)
+				}
 			}()
 			wrappedFunc.f()
 		}()
