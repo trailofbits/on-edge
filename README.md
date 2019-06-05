@@ -82,6 +82,11 @@ Step 3 will cause data races to be reported for global state changes that occur:
 
 An example can be found in the [example](example) subdirectory.
 
+Note that while global state changes in the shadow thread will be reported, they will still occur.  Be
+aware that if, say, those changes have external effects (e.g., a write to a database on an external
+machine), then those effects will happen _twice_: once in the main thread and once in the shadow thread.
+(Of course, this is exactly the sort of problem that OnEdge is meant to detect.)
+
 ## Testing OnEdge
 
 OnEdge itself can be tested in two ways:
