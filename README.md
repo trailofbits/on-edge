@@ -22,9 +22,36 @@ race and can be reported by [Go's race detector](https://golang.org/doc/articles
 
 When Go's race detector is disabled, OnEdge does nothing.
 
-## How do you incorporate OnEdge into your project?
+## Limitations
 
-To incorporate OnEdge into your project, you must do three things.
+1. OnEdge is a dynamic analysis, and like all dynamic analyses, its effectiveness depends upon the
+workload to which you subject your program.  In other words, for OnEdge to detect some global state
+change, you must provide inputs to your program that cause it to make that global state change.
+
+2. For some programs, OnEdge's results are non-deterministic, i.e., OnEdge could report a global state
+change for some runs of the program, but not for others.  We believe this is because
+[ThreadSanitizer](https://github.com/google/sanitizers) (on which Go's race detector is built) is itself
+non-deterministic.
+
+3. While nested uses to `WrapFunc` (see below) are supported, they can cause data races to be reported
+in OnEdge itself.  This is because OnEdge must, e.g., keep track of shadow threads, and doing so
+involves modifying the global state.  In theory, this problem could be solved by modifying the Go
+compiler (e.g.,
+[here](https://github.com/golang/go/blob/master/src/cmd/compile/internal/gc/racewalk.go)) to ignore the
+OnEdge package.  But modifying the Go compiler seems like a rather heavy handed solution to an
+infrequently occurring problem.  So, for now, we recommend that users simply ignore any reported data
+races involving OnEdge's code itself.
+
+4. OnEdge is not currently thread safe.  For now, you should not, e.g., call `WrapFunc` from two
+separate threads.
+
+5. If your program is multithreaded, then use of OnEdge may cause spurious data races to be reported.
+If you think that your program may contain a legitimate data race, then we recommend that you deal with
+that before enabling OnEdge.  Further investigation into this issue is needed.
+
+## Incorporating OnEdge into your project
+
+To incorporate OnEdge into your project, you must do three things:
 
 1. Wrap function bodies that `defer` calls to `recover` in `onedge.WrapFunc(func() {` ... `})`.
 
@@ -55,29 +82,17 @@ Step 3 will cause data races to be reported for global state changes that occur:
 
 An example can be found in the [example](example) subdirectory.
 
-## Limitations
+## Testing OnEdge
 
-1. OnEdge is a dynamic analysis, and like all dynamic analyses, its effectiveness depends upon the
-workload to which you subject your program.  In other words, for OnEdge to detect some global state
-change, you must provide inputs to your program that cause it to make that global state change.
+OnEdge itself can be tested in two ways:
+* `make basic_test` performs a set of basic tests.
+* `make nested_test` tests nested uses of `WrapFunc`.  This test is expensive as it performs a 2^22
+exhaust.  On a MacBook Pro, this test takes the better part of a work day to run.
 
-2. For some programs, OnEdge's results are non-deterministic, i.e., OnEdge could report a global state
-change for some runs of the program, but not for others.  We suspect this is because
-[ThreadSanitizer](https://github.com/google/sanitizers) (on which Go's race detector is built) is itself
-non-deterministic.  However, further investigation into this issue is needed.
+## Scripts
 
-3. If your program is multithreaded, then use of OnEdge can cause spurious data races to be reported.
-This has to do with how the main thread communicates with shadow threads.  If you think that your
-program may contain a legitimate data race, then we recommend that you deal with that before enabling
-OnEdge.
-
-4. While nested uses to `WrapFunc` are supported, they can cause data races to be reported in OnEdge
-itself.  This is because OnEdge must, e.g., keep track of shadow threads, and doing so involves
-modifying the global state.  In theory, this problem could be solved modifying the Go compiler (e.g.,
-[here](https://github.com/golang/go/blob/master/src/cmd/compile/internal/gc/racewalk.go)) to ignore the
-OnEdge package.  But modifying the Go compiler seems like a rather heavy handed solution to an
-infrequently occurring problem.  So, for now, we recommend that users simply ignore any reported data
-races involving OnEdge's code itself.
+The [scripts](scripts) subdirectory contains some experimental scripts for filtering the Go race
+detector's output.
 
 ## References
 
@@ -94,3 +109,4 @@ races involving OnEdge's code itself.
 ## License
 
 The code in this repository is licensed under the [Apache 2.0 license](LICENSE).
+
