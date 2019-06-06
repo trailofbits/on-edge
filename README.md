@@ -65,9 +65,9 @@ A function to which steps 1 and 2 have been applied might look something like th
 func handle(request Request) {
     onedge.WrapFunc(func() {
         defer func() {
-          if r := onedge.WrapRecover(recover()); r != nil {
-            log.Println(r)
-          }
+            if r := onedge.WrapRecover(recover()); r != nil {
+                log.Println(r)
+            }
         }()
         ...
         // Panicky code that potentially modifies global state
