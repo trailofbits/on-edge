@@ -61,7 +61,7 @@ To incorporate OnEdge into your project, you must do three things:
 [enabled](https://golang.org/doc/articles/race_detector.html#Usage), e.g., `go run -race mysrc.go`.
 
 A function to which steps 1 and 2 have been applied might look something like this:
-```
+```go
 func handle(request Request) {
     onedge.WrapFunc(func() {
         defer func() {
