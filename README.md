@@ -33,19 +33,10 @@ change for some runs of the program, but not for others.  We believe this is bec
 [ThreadSanitizer](https://github.com/google/sanitizers) (on which Go's race detector is built) is itself
 non-deterministic.
 
-3. While nested uses to `WrapFunc` (see below) are supported, they can cause data races to be reported
-in OnEdge itself.  This is because OnEdge must, e.g., keep track of shadow threads, and doing so
-involves modifying the global state.  In theory, this problem could be solved by modifying the Go
-compiler (e.g.,
-[here](https://github.com/golang/go/blob/master/src/cmd/compile/internal/gc/racewalk.go)) to ignore the
-OnEdge package.  But modifying the Go compiler seems like a rather heavy handed solution to an
-infrequently occurring problem.  So, for now, we recommend that users simply ignore any reported data
-races involving OnEdge's code itself.
-
-4. OnEdge is not currently thread safe.  For now, you should not, e.g., call `WrapFunc` from two
+3. OnEdge is not currently thread safe.  For now, you should not, e.g., call `WrapFunc` from two
 separate threads.
 
-5. If your program is multithreaded, then use of OnEdge may cause spurious data races to be reported.
+4. If your program is multithreaded, then use of OnEdge may cause spurious data races to be reported.
 If you think that your program may contain a legitimate data race, then we recommend that you deal with
 that before enabling OnEdge.  Further investigation into this issue is needed.
 
