@@ -16,15 +16,18 @@
 
 TEST_FLAGS := -test.failfast -test.v
 
-.PHONY: test basic_test nested_test on-edge.test vet
+.PHONY: test basic_test nested_test suppression_test on-edge.test vet
 
-test: basic_test nested_test
+test: basic_test nested_test suppression_test
 
 basic_test: on-edge.test
 	./$< $(TEST_FLAGS) -test.run TestBasic
 
 nested_test: on-edge.test
 	./$< $(TEST_FLAGS) -test.run TestNested
+
+suppression_test: on-edge.test
+	./$< $(TEST_FLAGS) -test.run TestSuppression
 
 on-edge.test:
 	go test -race -c

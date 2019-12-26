@@ -26,7 +26,8 @@
 #   * those involving "onedge.WrapFunc", as all other entries would not have been produced by OnEdge.
 #======================================================================================================#
 
-set -eu
+# set -x
+set -euo pipefail
 
 if [[ $# -ne 0 ]]; then
   echo "$0: expect no arguments" >&2

@@ -63,11 +63,11 @@ func checkExample(t *testing.T, output []byte, err error, outputFlags uint, expe
 func checkOutput(t *testing.T, output []byte, substr string, flag bool) {
 	if strings.Contains(string(output), substr) {
 		if !flag {
-			t.FailNow()
+			t.Fatalf("output contains '%v'", substr)
 		}
 	} else {
 		if flag {
-			t.FailNow()
+			t.Fatalf("output does not contain '%v'", substr)
 		}
 	}
 }
@@ -76,7 +76,7 @@ func checkOutput(t *testing.T, output []byte, substr string, flag bool) {
 
 func checkErr(t *testing.T, err error, expectedErr error) {
 	if fmt.Sprintf("%v", err) != fmt.Sprintf("%v", expectedErr) {
-		t.FailNow()
+		t.Fatalf("unexpected error: '%v' != '%v'", err, expectedErr)
 	}
 }
 
@@ -89,7 +89,7 @@ func runExample(t *testing.T, args ...string) ([]byte, error) {
 	exampleName := "Example" + t.Name()[4:]
 	cmd := exec.Command(
 		"./on-edge.test",
-		append([]string{"-test.failfast", "-test.v", "-test.run", exampleName + "$"}, args...)...,
+		append([]string{"-test.failfast", "-test.v", "-test.run", "^" + exampleName + "$"}, args...)...,
 	)
 	if utilVerbose {
 		fmt.Printf("cmd.Args = %v\n", cmd.Args)

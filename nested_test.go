@@ -77,32 +77,117 @@ func TestNested(t *testing.T) {
 func exampleNested(t *testing.T, x int, c chan struct{}) {
 	output, err := runExample(t, fmt.Sprintf("%d", x))
 	var outputFlags uint
-	dataRace0 := true &&
+	// sam.moelius: races[i] is the conditions necessary for a data race assuming panics(x, i), but not
+	// assuming panics(x, j), for any j > i.
+	var races [nPositions]bool
+	races[0] = false
+	races[1] = true &&
 		!panics(x, 0) &&
 		!panics(x, 8) &&
-		(increments(x, 0) || increments(x, 1) || increments(x, 8)) &&
-		(panics(x, 1) || panics(x, 2) || panics(x, 4) || (panics(x, 5) && panics(x, 3)) || panics(x, 6) || panics(x, 7))
-	// sam.moelius: dataRace1 is more inclusive than it ought to be.  This is a known limitation:
-	// crossing a WrapFuncR causes global state changes.
-	dataRace1 := true &&
+		(false ||
+			increments(x, 0) ||
+			increments(x, 1) ||
+			increments(x, 8))
+	races[2] = true &&
 		!panics(x, 0) &&
-		!panics(x, 8) &&
 		!panics(x, 1) &&
-		(panics(x, 2) || panics(x, 4) || (panics(x, 5) && panics(x, 3)) || panics(x, 6) || panics(x, 7))
-	dataRace2 := true &&
+		!panics(x, 8) &&
+		(false ||
+			increments(x, 0) ||
+			increments(x, 1) ||
+			increments(x, 2) ||
+			increments(x, 8))
+	races[3] = true &&
 		!panics(x, 0) &&
 		!panics(x, 1) &&
 		!panics(x, 2) &&
 		!panics(x, 4) &&
-		(increments(x, 2) || increments(x, 3) || increments(x, 4)) && panics(x, 3)
-	if dataRace0 || dataRace1 || dataRace2 {
-		outputFlags = 1 << dataRace
+		(false ||
+			increments(x, 2) ||
+			increments(x, 3) ||
+			increments(x, 4))
+	races[4] = true &&
+		!panics(x, 0) &&
+		!panics(x, 1) &&
+		!panics(x, 2) &&
+		!panics(x, 8) &&
+		(false ||
+			increments(x, 0) ||
+			increments(x, 1) ||
+			increments(x, 2) ||
+			increments(x, 3) ||
+			increments(x, 4) ||
+			increments(x, 8))
+	races[5] = true &&
+		!panics(x, 0) &&
+		!panics(x, 1) &&
+		!panics(x, 2) &&
+		panics(x, 3) &&
+		!panics(x, 4) &&
+		!panics(x, 8) &&
+		(false ||
+			increments(x, 0) ||
+			increments(x, 1) ||
+			increments(x, 2) ||
+			increments(x, 3) ||
+			increments(x, 4) ||
+			increments(x, 5) ||
+			increments(x, 8))
+	races[6] = true &&
+		!panics(x, 0) &&
+		!panics(x, 1) &&
+		!panics(x, 2) &&
+		(!panics(x, 3) || !panics(x, 5)) &&
+		!panics(x, 4) &&
+		!panics(x, 8) &&
+		(false ||
+			increments(x, 0) ||
+			increments(x, 1) ||
+			increments(x, 2) ||
+			increments(x, 3) ||
+			increments(x, 4) ||
+			(panics(x, 3) && increments(x, 5)) ||
+			increments(x, 6) ||
+			increments(x, 8))
+	races[7] = true &&
+		!panics(x, 0) &&
+		!panics(x, 1) &&
+		!panics(x, 2) &&
+		(!panics(x, 3) || !panics(x, 5)) &&
+		!panics(x, 4) &&
+		!panics(x, 6) &&
+		!panics(x, 8) &&
+		(false ||
+			increments(x, 0) ||
+			increments(x, 1) ||
+			increments(x, 2) ||
+			increments(x, 3) ||
+			increments(x, 4) ||
+			(panics(x, 3) && increments(x, 5)) ||
+			increments(x, 6) ||
+			increments(x, 7) ||
+			increments(x, 8))
+	races[8] = false
+	races[9] = false
+	races[10] = false
+	for i := range races {
+		if panics(x, i) && races[i] {
+			outputFlags = 1 << dataRace
+		}
 	}
 	var expectedErr error
 	if false ||
 		panics(x, 0) ||
 		panics(x, 8) ||
-		(panics(x, 9) && (panics(x, 1) || panics(x, 2) || panics(x, 4) || (panics(x, 5) && panics(x, 3)) || panics(x, 6) || panics(x, 7))) ||
+		(true &&
+			panics(x, 9) &&
+			(false ||
+				panics(x, 1) ||
+				panics(x, 2) ||
+				panics(x, 4) ||
+				(panics(x, 5) && panics(x, 3)) ||
+				panics(x, 6) ||
+				panics(x, 7))) ||
 		panics(x, 10) {
 		expectedErr = fmt.Errorf("exit status 2")
 	} else if outputFlags != 0 {

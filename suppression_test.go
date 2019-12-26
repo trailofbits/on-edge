@@ -14,40 +14,35 @@
 // limitations under the License.
 //====================================================================================================//
 
-// +build !race
-
-// This is the "no-race" version of OnEdge.  This version does essentially nothing.  Given that you are
-// looking at the source code, chances are you want "onedge_race.go".
+// +build race
 
 //====================================================================================================//
 
 package onedge
 
-/*
-// Without 'import "C"', the go compiler will complain that there are C source files present, e.g.,
-// tsan_supressions.c.
-*/
-import "C"
+import (
+	"fmt"
+	"testing"
+)
 
 //====================================================================================================//
 
-// WrapFunc just calls its function argument f.
-func WrapFunc(f func()) {
-	f()
+func TestSuppression(t *testing.T) {
+	output, err := runExample(t, "")
+	checkExample(t, output, err, 0, nil)
 }
 
-//====================================================================================================//
-
-// WrapFuncR just calls its function argument f and returns the result.
-func WrapFuncR(f func() interface{}) interface{} {
-	return f()
-}
-
-//====================================================================================================//
-
-// WrapRecover just returns its argument r.
-func WrapRecover(r interface{}) interface{} {
-	return r
+func ExampleSuppression() {
+	WrapFunc(func() {
+		defer func() {
+			if r := WrapRecover(recover()); r != nil {
+			}
+		}()
+		WrapFunc(func() {
+			panic(fmt.Errorf(""))
+		})
+	})
+	// Output:
 }
 
 //====================================================================================================//

@@ -41,6 +41,31 @@ import (
 
 //====================================================================================================//
 
+// sam.moelius: The code in this block prevents OnEdge from reporting a data race in itself.  Setting
+// environment variable GORACE to "verbosity=2" is useful for debugging this code.  Additional options
+// can be found at: https://github.com/google/sanitizers/wiki/ThreadSanitizerFlags
+
+/*
+struct SuppressionContext;
+struct SuppressionContext *__tsan_Suppressions();
+int __sanitizer_SuppressionContext_Parse(struct SuppressionContext *this, const char *value);
+*/
+import "C"
+
+func init() {
+	suppressions := C.__tsan_Suppressions()
+	C.__sanitizer_SuppressionContext_Parse(
+		suppressions,
+		C.CString("race:^github.com/trailofbits/on-edge.mainThreadWrapFuncRFinal$"),
+	)
+	C.__sanitizer_SuppressionContext_Parse(
+		suppressions,
+		C.CString("race:^github.com/trailofbits/on-edge.WrapRecover$"),
+	)
+}
+
+//====================================================================================================//
+
 // wrappedFuncT are created by the main thread when WrapFuncR is called.  A wrappedFuncT corresponds
 // to a shadow thread.  A wrappedFuncT serves two purposes.  It allows the main thread to distinguish
 // itself from the shadow thread and vice versa.  It also contains information that allows the main
@@ -124,12 +149,25 @@ func WrapFuncR(f func() interface{}) interface{} {
 		}
 		mainThreadStack = append(mainThreadStack, wrappedFunc)
 		go shadowThread(toShadowThreadExitChan, wrappedFunc)
-		defer func() {
-			toShadowThreadExitChan <- struct{}{}
-			mainThreadStack = mainThreadStack[:len(mainThreadStack)-1]
-		}()
+		defer mainThreadWrapFuncRFinal(toShadowThreadExitChan)
 	}
 	return f()
+}
+
+// sam.moelius: OnEdge reports a data race between the calculation of inMainThread in the first line of
+// WrapFuncR, and the popping of mainThreadStack.  Suppressing all reports associated with WrapFuncR
+// would be too much.  An alternative is to put the calculation of inMainThread or the popping of
+// mainThreadStack into its own function, and to suppress reports associated with that function.  I
+// chose the latter.
+//   Note that there is no similar data race between the increment and decrement of
+// shadowThreadWrapFuncDepth.  That is because (as mentioned above) shadow threads do not create other
+// shadow threads.
+//   OnEdge similarly reports a data race between the calculation of inMainThread in the first line of
+// WrapFuncR, and the acquisition of mainThreadStack's top element in WrapRecover.  But, in that case,
+// there is no problem with suppressing all reports associated with WrapRecover.
+func mainThreadWrapFuncRFinal(toShadowThreadExitChan chan struct{}) {
+	toShadowThreadExitChan <- struct{}{}
+	mainThreadStack = mainThreadStack[:len(mainThreadStack)-1]
 }
 
 //====================================================================================================//
