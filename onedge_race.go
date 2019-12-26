@@ -58,6 +58,10 @@ func init() {
 		suppressions,
 		C.CString("race:^github.com/trailofbits/on-edge.mainThreadWrapFuncRFinal$"),
 	)
+	C.__sanitizer_SuppressionContext_Parse(
+		suppressions,
+		C.CString("race:^github.com/trailofbits/on-edge.WrapRecover$"),
+	)
 }
 
 //====================================================================================================//
@@ -158,6 +162,9 @@ func WrapFuncR(f func() interface{}) interface{} {
 //   Note that there is no similar data race between the increment and decrement of
 // shadowThreadWrapFuncDepth.  That is because (as mentioned above) shadow threads do not create other
 // shadow threads.
+//   OnEdge similarly reports a data race between the calculation of inMainThread in the first line of
+// WrapFuncR, and the acquisition of mainThreadStack's top element in WrapRecover.  But, in that case,
+// there is no problem with suppressing all reports associated with WrapRecover.
 func mainThreadWrapFuncRFinal(toShadowThreadExitChan chan struct{}) {
 	toShadowThreadExitChan <- struct{}{}
 	mainThreadStack = mainThreadStack[:len(mainThreadStack)-1]
