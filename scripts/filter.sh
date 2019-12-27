@@ -23,7 +23,8 @@
 #   * those involving a goroutine that was "finished" when the race occurred.
 #
 # Finally, this script limits the entries to:
-#   * those involving "onedge.WrapFunc", as all other entries would not have been produced by OnEdge.
+#   * those involving "github.com/trailofbits/on-edge.WrapFuncR"
+# as all other entries would not have been produced by OnEdge.
 #======================================================================================================#
 
 # set -x
@@ -38,6 +39,6 @@ cat \
 | grep -v '\<failed to restore the stack\>' \
 | grep -v '\<fmt\.' \
 | grep -v '\<Goroutine (finished)' \
-| grep '\<created at: onedge\.WrapFuncR\>'
+| grep '\<created at: github\.com/trailofbits/on-edge\.WrapFuncR\>'
 
 #======================================================================================================#
