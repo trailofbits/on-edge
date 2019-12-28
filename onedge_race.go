@@ -62,6 +62,10 @@ func init() {
 		suppressions,
 		C.CString("race:^github.com/trailofbits/on-edge.WrapRecover$"),
 	)
+	C.__sanitizer_SuppressionContext_Parse(
+		suppressions,
+		C.CString("race:^github.com/trailofbits/on-edge.WrapError$"),
+	)
 }
 
 //====================================================================================================//
@@ -85,6 +89,10 @@ type wrappedFuncT struct {
 	fromShadowThreadRecoverChan chan interface{}
 	// toShadowThreadRecoverChan is used by the main thread to acknowledge receipt of a recover result.
 	toShadowThreadRecoverChan chan struct{}
+	// fromShadowThreadErrorChan...
+	fromShadowThreadErrorChan chan error
+	// toShadowThreadErrorChan...
+	toShadowThreadErrorChan chan struct{}
 }
 
 // mainThreadStack contains a wrappedFuncT for each call to WrapFuncR on the main thread's stack.
@@ -107,6 +115,20 @@ func WrapFunc(f func()) {
 		f()
 		return nil
 	})
+}
+
+//====================================================================================================//
+
+// WrapFuncRError...
+func WrapFuncRError(f func() error) error {
+	err := WrapFuncR(func() interface{} {
+		return f()
+	})
+	if err == nil {
+		return nil
+	} else {
+		return err.(error)
+	}
 }
 
 //====================================================================================================//
@@ -146,6 +168,8 @@ func WrapFuncR(f func() interface{}) interface{} {
 			fromShadowThreadCallFuncChan: make(chan struct{}),
 			fromShadowThreadRecoverChan:  make(chan interface{}),
 			toShadowThreadRecoverChan:    make(chan struct{}),
+			fromShadowThreadErrorChan:    make(chan error),
+			toShadowThreadErrorChan:      make(chan struct{}),
 		}
 		mainThreadStack = append(mainThreadStack, wrappedFunc)
 		go shadowThread(toShadowThreadExitChan, wrappedFunc)
@@ -243,6 +267,69 @@ func WrapRecover(r interface{}) interface{} {
 		}
 	}
 	return r
+}
+
+//====================================================================================================//
+
+// TODO: Unify WrapRecover and WrapError.
+// WrapError...
+func WrapError(err error) error {
+	if len(mainThreadStack) <= 0 {
+		fmt.Fprintf(os.Stderr, "=== WrapError with no enclosing WrapFunc/WrapFuncR.\n")
+		return err
+	}
+	wrappedFunc := mainThreadStack[len(mainThreadStack)-1]
+	if !haveCallers(wrappedFunc.callers) {
+		if shadowThreadWrapFuncDepth <= 0 {
+			wrappedFunc.fromShadowThreadErrorChan <- err
+			<-wrappedFunc.toShadowThreadErrorChan
+		}
+		return err
+	}
+	if err != nil {
+		// sam.moelius: See comment in WrapRecover ren enabling/disabling the race detector.
+		runtime.RaceDisable()
+		wrappedFunc.toShadowThreadCallFuncChan <- struct{}{}
+		runtime.RaceEnable()
+		nReturnError := 0
+		for {
+			var exit bool
+			var shadowErr error
+			select {
+			case <-wrappedFunc.fromShadowThreadCallFuncChan:
+				exit = true
+				break
+			case shadowErr = <-wrappedFunc.fromShadowThreadErrorChan:
+				break
+			}
+			if exit {
+				break
+			}
+			if shadowErr == nil {
+				fmt.Fprintf(os.Stderr, "=== Shadow thread did not return an error as it should have.\n")
+			} else {
+				s := fmt.Sprintf("%v", err)
+				shadowS := fmt.Sprintf("%v", shadowErr)
+				if s != shadowS {
+					fmt.Fprintf(
+						os.Stderr,
+						"=== Shadow thread returned a different error: %s != %s\n",
+						s,
+						shadowS,
+					)
+				}
+			}
+			nReturnError++
+			wrappedFunc.toShadowThreadErrorChan <- struct{}{}
+		}
+		if nReturnError <= 0 {
+			fmt.Fprintf(os.Stderr, "=== Shadow thread did not return through WrapError it should have.\n")
+		} else if nReturnError >= 2 {
+			fmt.Fprintf(os.Stderr, "=== Shadow thread returned through WrapError multiple times (%d).\n",
+				nReturnError)
+		}
+	}
+	return err
 }
 
 //====================================================================================================//
